@@ -11,6 +11,6 @@
     "editor.read": true,
     "editor.write": true,
     "editor.decorations": true,
-    "system.exec": ["curl"]
+    "network.http": ["127.0.0.1"]
   }
 }

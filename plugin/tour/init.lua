@@ -2,12 +2,10 @@
 -- 127.0.0.1:PORT; this plugin long-polls it for commands (open a file, show
 -- a step, post a message, ...), reports each command's outcome, and sends
 -- what the user types in the Tour pane.
---
--- ttt.net refuses loopback addresses, so requests go through curl.
 local ttt = require("ttt")
 local editor = require("ttt.editor")
 local deco = require("ttt.decorations")
-local sys = require("ttt.system")
+local net = require("ttt.net")
 local json = require("ttt.json")
 
 local PORT = 4250
@@ -24,22 +22,20 @@ local sending = false
 local session = tostring(os.time()) .. "-" .. tostring(math.random(1, 1000000))
 local seq = 0
 
--- request runs curl and calls done with { status = HTTP status or 0, body }.
-local function request(path, body, max_time, done)
-  local args = { "-sS", "--max-time", tostring(max_time), "-w", "\n%{http_code}" }
-  local opts = {}
-  if body then
-    for _, a in ipairs({ "-H", "Content-Type: application/json", "--data-binary", "@-" }) do
-      table.insert(args, a)
-    end
-    opts.stdin = body
+-- request calls done with { status = HTTP status or 0, body }. ttt.net
+-- times out after 30 seconds, which bounds the long-poll wait.
+local function request(path, body, done)
+  local function finish(res)
+    done({ status = res.status or 0, body = res.body or "" })
   end
-  table.insert(args, BASE .. path)
-  sys.exec_async("curl", args, opts, function(res)
-    local out = res.stdout or ""
-    local body_text, code = out:match("^(.*)\n(%d+)$")
-    done({ status = tonumber(code) or 0, body = body_text or "" })
-  end)
+  if body then
+    net.post_async(BASE .. path, {
+      headers = { ["Content-Type"] = "application/json" },
+      body = body,
+    }, finish)
+  else
+    net.get_async(BASE .. path, finish)
+  end
 end
 
 local function add(kind, text)
@@ -83,7 +79,7 @@ local function flush()
   end
   sending = true
   local msg = outbox[1]
-  request("/message", json.encode(msg), 10, function(res)
+  request("/message", json.encode(msg), function(res)
     sending = false
     if res.status == 204 or res.status == 200 then
       table.remove(outbox, 1)
@@ -171,7 +167,7 @@ function ops.screen(a)
 end
 
 local function report(id, data, err)
-  request("/result", json.encode({ id = id, data = data, error = err }), 10, function() end)
+  request("/result", json.encode({ id = id, data = data, error = err }), function() end)
 end
 
 local poll
@@ -191,7 +187,7 @@ local function handle(cmd)
 end
 
 poll = function()
-  request("/poll?after=" .. acked .. "&wait=" .. POLL_WAIT, nil, POLL_WAIT + 10, function(res)
+  request("/poll?after=" .. acked .. "&wait=" .. POLL_WAIT, nil, function(res)
     if res.status ~= 200 then
       if connected then
         connected = false

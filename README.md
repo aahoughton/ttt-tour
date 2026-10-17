@@ -17,11 +17,10 @@ Two parts:
 
 A ttt with the plugin APIs this needs: `ttt.decorations` (line tints, text
 highlights and notes; eugenioenko/ttt#952) and `ttt.show_panel` /
-`ttt.focus_panel`, input `autofocus` and markdown `follow`. Until those land,
-build ttt from a branch that has them.
-
-`curl` on the PATH. ttt's plugin network API refuses loopback addresses, so the
-plugin reaches ttt-mcp through `curl` (the plugin asks for `system.exec: curl`).
+`ttt.focus_panel`, input `autofocus` and markdown `follow`, and `ttt.net`
+requests to a loopback host the manifest lists (the plugin asks for
+`network.http: ["127.0.0.1"]`). Until those land, build ttt from a branch that
+has them.
 
 ## Setup
 
