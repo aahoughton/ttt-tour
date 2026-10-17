@@ -55,7 +55,7 @@ local function thread_markdown()
       table.insert(parts, "---")
     end
     if e.kind == "user" then
-      table.insert(parts, "**You:** " .. e.text)
+      table.insert(parts, "**You:** " .. e.text:gsub("\n", "  \n"))
     else
       table.insert(parts, e.text)
     end
@@ -215,8 +215,10 @@ ttt.register({
       panel:label({ text = status(), style = "muted" })
       panel:input({
         prefix = "> ",
-        placeholder = "Message the agent (Enter alone: continue)",
+        placeholder = "Message the agent (Enter alone: continue; Alt+Enter or Ctrl+J: new line)",
         autofocus = true,
+        wrap = true,
+        max_rows = 6,
         clear_on_submit = true,
         on_submit = send,
       })
