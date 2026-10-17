@@ -1,0 +1,422 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+const (
+	defaultWaitSeconds = 120
+	maxWaitSeconds     = 600
+)
+
+type tool struct {
+	name        string
+	description string
+	schema      map[string]any
+	run         func(ctx context.Context, args json.RawMessage) (string, error)
+}
+
+func object(required []string, props map[string]any) map[string]any {
+	s := map[string]any{"type": "object", "properties": props, "additionalProperties": false}
+	if len(required) > 0 {
+		s["required"] = required
+	}
+	return s
+}
+
+func prop(typ, description string) map[string]any {
+	return map[string]any{"type": typ, "description": description}
+}
+
+// decodeArgs rejects unknown fields so a misspelled argument fails loudly
+// instead of being dropped.
+func decodeArgs(args json.RawMessage, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("invalid arguments: %w", err)
+	}
+	return nil
+}
+
+func (s *server) instructions() string {
+	var sb strings.Builder
+	sb.WriteString(`Drives a running ttt editor, through its tour plugin, to explain code, specs
+or documents to the user, quiz them, or work through exercises with them. The
+user reads and replies in ttt's Tour pane.
+
+- show_code opens a file, highlights a line range, draws a short note under
+  it and adds the explanation (markdown) to the Tour pane. Prefer ranges that
+  fit on one screen. highlight_text points at exact text inside the range (a
+  parameter, a type, a phrase in a spec). Focus stays where the user left it.
+- say posts a message to the Tour pane; with choices it is a numbered list
+  the user can answer by number.
+- move_pane puts the pane at the bottom (wide code, long lines) or on the
+  right (a running conversation beside the code). This changes the user's
+  panel layout, so do it only when it clearly helps.
+- get_editor_state tells you what the user is looking at or has selected,
+  and with include_text returns the buffer, including unsaved edits.
+  view_screen returns the whole screen as text.
+- end_tour removes the highlights and clears the pane when the user is done.
+
+Text you write in your own transcript never reaches the user: anything they
+should see goes through say or show_code. Answer every user message with say
+or show_code, even briefly; the pane shows "Agent is working" until you do.
+A message of "continue" means go on to the next step.
+`)
+	if s.channel {
+		sb.WriteString(`
+Messages the user types in the Tour pane arrive as <channel source="ttt-tour"
+at="file:lines">text</channel>; "at" is the step on screen when they sent it.
+`)
+	} else {
+		sb.WriteString(`
+After each reply, call wait_for_message to receive the user's next message
+from the Tour pane. It returns without messages after wait_seconds; call it
+again to keep waiting. Stop when the user asks to end the tour.
+`)
+	}
+	return sb.String()
+}
+
+func (s *server) toolList() []tool {
+	b := s.b
+	tools := []tool{
+		{
+			name:        "show_code",
+			description: "Open a file in ttt, highlight a line range, draw a note under it and add an explanation to the Tour pane.",
+			schema: object([]string{"file", "start_line"}, map[string]any{
+				"file":        prop("string", "file path; absolute, or relative to the current directory"),
+				"start_line":  prop("integer", "first line to highlight (1-based)"),
+				"end_line":    prop("integer", "last line to highlight, inclusive; defaults to start_line"),
+				"title":       prop("string", "short heading for this step"),
+				"explanation": prop("string", "markdown for the Tour pane: the main explanation of this step"),
+				"note":        prop("string", "one or two plain-text sentences drawn under the highlighted lines; a blank line starts a new paragraph"),
+				"highlight_text": map[string]any{
+					"type":        "array",
+					"description": "text within the range to highlight more strongly, e.g. a parameter, a type or a phrase in a spec",
+					"items": object([]string{"line", "text"}, map[string]any{
+						"line":       prop("integer", "line the text starts on (1-based)"),
+						"text":       prop("string", "the exact text to highlight, copied from the line; may continue onto following lines with \n"),
+						"occurrence": prop("integer", "which match on that line when the text appears more than once, counting matches that do not overlap (default 1)"),
+					}),
+				},
+			}),
+			run: b.showCode,
+		},
+		{
+			name:        "say",
+			description: "Post a message (markdown) to the user in ttt's Tour pane, optionally with numbered choices to answer.",
+			schema: object([]string{"text"}, map[string]any{
+				"text":    prop("string", "the message, in markdown"),
+				"choices": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "options shown as a numbered list; the user answers in their next message"},
+			}),
+			run: b.say,
+		},
+		{
+			name:        "move_pane",
+			description: "Dock ttt's panel area, which holds the Tour pane, at the bottom or on the right, or bring the Tour pane to the front. Docking is saved as the user's layout.",
+			schema: object([]string{"position"}, map[string]any{
+				"position": map[string]any{"type": "string", "enum": []string{"bottom", "right", "show"}},
+			}),
+			run: b.movePane,
+		},
+		{
+			name:        "end_tour",
+			description: "Remove the tour's highlights and notes from ttt and clear the Tour pane.",
+			schema:      object(nil, map[string]any{}),
+			run: func(ctx context.Context, _ json.RawMessage) (string, error) {
+				if _, err := b.call(ctx, "clear", nil); err != nil {
+					return "", err
+				}
+				b.setLocation("")
+				return "Tour ended", nil
+			},
+		},
+		{
+			name:        "view_screen",
+			description: "Return the text currently on the ttt screen.",
+			schema:      object(nil, map[string]any{}),
+			run:         b.viewScreen,
+		},
+		{
+			name:        "get_editor_state",
+			description: "Return the active file, cursor, visible lines and selected text in ttt (1-based lines and columns).",
+			schema: object(nil, map[string]any{
+				"include_text": prop("boolean", "also return the active buffer's full text, including unsaved edits"),
+			}),
+			run: func(ctx context.Context, args json.RawMessage) (string, error) {
+				var in struct {
+					IncludeText bool `json:"include_text"`
+				}
+				if err := decodeArgs(args, &in); err != nil {
+					return "", err
+				}
+				data, err := b.call(ctx, "state", map[string]bool{"include_text": in.IncludeText})
+				if err != nil {
+					return "", err
+				}
+				var out bytes.Buffer
+				if err := json.Indent(&out, data, "", "  "); err != nil {
+					return "", err
+				}
+				return out.String(), nil
+			},
+		},
+	}
+	if !s.channel {
+		tools = append(tools, tool{
+			name:        "wait_for_message",
+			description: "Wait for the user's next message from ttt's Tour pane.",
+			schema: object(nil, map[string]any{
+				"wait_seconds": prop("integer", fmt.Sprintf("seconds to wait before returning empty (default %d, max %d)", defaultWaitSeconds, maxWaitSeconds)),
+			}),
+			run: b.waitForMessage,
+		})
+	}
+	return tools
+}
+
+type span struct {
+	Line       int    `json:"line"`
+	Text       string `json:"text"`
+	Occurrence int    `json:"occurrence,omitempty"`
+}
+
+// decoration is an item for the plugin's ttt.decorations.set: 1-based lines
+// and rune columns, end_col exclusive.
+type decoration struct {
+	Line    int    `json:"line"`
+	EndLine int    `json:"end_line,omitempty"`
+	Col     int    `json:"col,omitempty"`
+	EndCol  int    `json:"end_col,omitempty"`
+	Note    string `json:"note,omitempty"`
+}
+
+func (b *hub) showCode(ctx context.Context, args json.RawMessage) (string, error) {
+	var in struct {
+		File        string `json:"file"`
+		StartLine   int    `json:"start_line"`
+		EndLine     int    `json:"end_line"`
+		Title       string `json:"title"`
+		Explanation string `json:"explanation"`
+		Note        string `json:"note"`
+		Highlights  []span `json:"highlight_text"`
+	}
+	if err := decodeArgs(args, &in); err != nil {
+		return "", err
+	}
+	if in.File == "" {
+		return "", fmt.Errorf("file is required")
+	}
+	end := max(in.EndLine, in.StartLine)
+	if in.StartLine < 1 {
+		return "", fmt.Errorf("start_line must be 1 or more")
+	}
+	path, err := filepath.Abs(in.File)
+	if err != nil {
+		return "", err
+	}
+	data, err := b.call(ctx, "open", map[string]any{"path": path})
+	if err != nil {
+		return "", err
+	}
+	var opened struct {
+		Lines []string `json:"lines"`
+	}
+	if err := json.Unmarshal(data, &opened); err != nil {
+		return "", fmt.Errorf("reading %s from ttt: %w", in.File, err)
+	}
+	if end > len(opened.Lines) {
+		return "", fmt.Errorf("%s has %d lines; cannot show %d-%d", in.File, len(opened.Lines), in.StartLine, end)
+	}
+	items := []decoration{{Line: in.StartLine, EndLine: end}}
+	for _, sp := range in.Highlights {
+		if sp.Line < in.StartLine || sp.Line > end {
+			return "", fmt.Errorf("highlight_text line %d is outside lines %d-%d", sp.Line, in.StartLine, end)
+		}
+		d, err := spanDecoration(opened.Lines, sp)
+		if err != nil {
+			return "", err
+		}
+		items = append(items, d)
+	}
+	if note := strings.TrimSpace(in.Note); note != "" {
+		items = append(items, decoration{Line: end, Note: note})
+	}
+	at := fmt.Sprintf("%s:%d-%d", displayPath(path), in.StartLine, end)
+	if in.StartLine == end {
+		at = fmt.Sprintf("%s:%d", displayPath(path), in.StartLine)
+	}
+	step := map[string]any{
+		"path":     path,
+		"line":     in.StartLine,
+		"items":    items,
+		"top":      max(1, in.StartLine-3),
+		"markdown": stepMarkdown(in.Title, at, in.Explanation),
+	}
+	if _, err := b.call(ctx, "step", step); err != nil {
+		return "", err
+	}
+	b.setLocation(at)
+	return "Showing " + at, nil
+}
+
+func stepMarkdown(title, at, body string) string {
+	var sb strings.Builder
+	if title != "" {
+		sb.WriteString("**" + title + "**  ")
+	}
+	sb.WriteString("`" + at + "`")
+	if body = strings.TrimSpace(body); body != "" {
+		sb.WriteString("\n\n" + body)
+	}
+	return sb.String()
+}
+
+// displayPath shortens path to one relative to the current directory when it
+// is inside it.
+func displayPath(path string) string {
+	if wd, err := os.Getwd(); err == nil {
+		if rel, err := filepath.Rel(wd, path); err == nil && !strings.HasPrefix(rel, "..") {
+			return rel
+		}
+	}
+	return path
+}
+
+// spanDecoration finds sp.Text starting on line sp.Line, which it may run
+// past onto the following lines, and returns it as a text range. Matches are
+// counted without overlapping.
+func spanDecoration(lines []string, sp span) (decoration, error) {
+	if sp.Text == "" {
+		return decoration{}, fmt.Errorf("highlight_text needs text")
+	}
+	if sp.Occurrence < 0 {
+		return decoration{}, fmt.Errorf("occurrence must be 1 or more")
+	}
+	first := sp.Line - 1
+	n := strings.Count(sp.Text, "\n") + 1
+	if first < 0 || first+n > len(lines) {
+		return decoration{}, fmt.Errorf("%q not found on line %d", sp.Text, sp.Line)
+	}
+	window := strings.Join(lines[first:first+n], "\n")
+	start := -1
+	for from, seen := 0, 0; from <= len(lines[first]); {
+		i := strings.Index(window[from:], sp.Text)
+		if i < 0 || from+i >= len(lines[first]) {
+			break
+		}
+		seen++
+		if seen == max(sp.Occurrence, 1) {
+			start = from + i
+			break
+		}
+		from += i + len(sp.Text)
+	}
+	if start < 0 {
+		if sp.Occurrence > 1 {
+			return decoration{}, fmt.Errorf("occurrence %d of %q not found on line %d", sp.Occurrence, sp.Text, sp.Line)
+		}
+		return decoration{}, fmt.Errorf("%q not found on line %d", sp.Text, sp.Line)
+	}
+	endLine, endCol := runePos(window, start+len(sp.Text))
+	_, startCol := runePos(window, start)
+	return decoration{Line: sp.Line, Col: startCol + 1, EndLine: first + endLine + 1, EndCol: endCol + 1}, nil
+}
+
+// runePos returns the 0-based line and rune column of byte offset off in
+// text.
+func runePos(text string, off int) (line, col int) {
+	before := text[:off]
+	line = strings.Count(before, "\n")
+	if i := strings.LastIndexByte(before, '\n'); i >= 0 {
+		before = before[i+1:]
+	}
+	return line, utf8.RuneCountInString(before)
+}
+
+func (b *hub) say(ctx context.Context, args json.RawMessage) (string, error) {
+	var in struct {
+		Text    string   `json:"text"`
+		Choices []string `json:"choices,omitempty"`
+	}
+	if err := decodeArgs(args, &in); err != nil {
+		return "", err
+	}
+	text := strings.TrimSpace(in.Text)
+	for i, c := range in.Choices {
+		sep := "\n"
+		if i == 0 {
+			sep = "\n\n"
+		}
+		text += fmt.Sprintf("%s%d. %s", sep, i+1, c)
+	}
+	if _, err := b.call(ctx, "say", map[string]string{"markdown": text}); err != nil {
+		return "", err
+	}
+	return "Posted", nil
+}
+
+func (b *hub) movePane(ctx context.Context, args json.RawMessage) (string, error) {
+	var in struct {
+		Position string `json:"position"`
+	}
+	if err := decodeArgs(args, &in); err != nil {
+		return "", err
+	}
+	switch in.Position {
+	case "bottom", "right", "show":
+	default:
+		return "", fmt.Errorf("position must be bottom, right or show")
+	}
+	if _, err := b.call(ctx, "pane", map[string]string{"where": in.Position}); err != nil {
+		return "", err
+	}
+	return "Pane: " + in.Position, nil
+}
+
+func (b *hub) viewScreen(ctx context.Context, _ json.RawMessage) (string, error) {
+	f, err := os.CreateTemp("", "ttt-mcp-screen-*")
+	if err != nil {
+		return "", err
+	}
+	path := f.Name()
+	f.Close()
+	defer os.Remove(path)
+	if _, err := b.call(ctx, "screen", map[string]string{"path": path}); err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
+	return string(data), err
+}
+
+func (b *hub) waitForMessage(ctx context.Context, args json.RawMessage) (string, error) {
+	var in struct {
+		WaitSeconds int `json:"wait_seconds"`
+	}
+	if err := decodeArgs(args, &in); err != nil {
+		return "", err
+	}
+	seconds := in.WaitSeconds
+	if seconds <= 0 {
+		seconds = defaultWaitSeconds
+	}
+	msgs, err := b.recv(ctx, time.Duration(min(seconds, maxWaitSeconds))*time.Second)
+	if err == errNoMessage {
+		return "No message yet. Call wait_for_message again to keep waiting.", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	data, err := json.MarshalIndent(msgs, "", "  ")
+	return string(data), err
+}

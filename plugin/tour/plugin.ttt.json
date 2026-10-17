@@ -1,0 +1,16 @@
+{
+  "name": "tour",
+  "displayName": "Code Tour",
+  "description": "Lets an agent walk you through code over MCP (with ttt-mcp): highlights, notes, and a conversation pane.",
+  "version": "0.1.0",
+  "entry": "init.lua",
+  "api": 1,
+  "permissions": {
+    "panel.bottom": true,
+    "commands": true,
+    "editor.read": true,
+    "editor.write": true,
+    "editor.decorations": true,
+    "system.exec": ["curl"]
+  }
+}
