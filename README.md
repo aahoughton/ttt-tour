@@ -16,10 +16,9 @@ Two parts, both in this repository:
 
 ## Requirements
 
-A ttt with `ttt.show_panel` / `ttt.focus_panel` and markdown `follow`
-(eugenioenko/ttt#991); everything else the plugin uses is in ttt's main
-branch. Until that lands, build ttt from the PR's branch. The plugin asks for
-`network.http: ["127.0.0.1:4250"]` to reach ttt-mcp.
+A ttt newer than v1.8.0. The plugin needs `ttt.show_panel` /
+`ttt.focus_panel` and markdown `follow` (eugenioenko/ttt#991), which are on
+ttt's main branch and not yet in a release, so for now build ttt from main.
 
 ## Setup
 
