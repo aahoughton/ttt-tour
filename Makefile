@@ -11,9 +11,9 @@ test:
 fmt:
 	gofmt -w cmd
 
-# Copies the plugin into ttt's plugin folder (ttt does not follow symlinks
-# there). Run it again after changing the plugin, then Plugins: Reload.
+# Copies the ttt plugin into ttt's plugin folder, for working on it (ttt does
+# not follow symlinks there). Run it again after changing the plugin, then
+# Plugins: Reload.
 install-plugin:
-	mkdir -p "$(TTT_CONFIG_DIR)/plugins"
-	rm -rf "$(TTT_CONFIG_DIR)/plugins/tour"
-	cp -R plugin/tour "$(TTT_CONFIG_DIR)/plugins/tour"
+	mkdir -p "$(TTT_CONFIG_DIR)/plugins/ttt-tour"
+	cp init.lua plugin.ttt.json "$(TTT_CONFIG_DIR)/plugins/ttt-tour/"

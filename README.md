@@ -5,10 +5,11 @@ Code opens files, highlights lines and text, draws short notes under the code,
 and talks with you in a **Tour** pane. You reply in the pane, so once you have
 asked for a tour you can stay in ttt.
 
-Two parts:
+Two parts, both in this repository:
 
-- `plugin/tour`, a ttt plugin: the Tour pane, the highlights and notes, and the
-  commands **Tour: Message Agent**, **Tour: Continue** and **Tour: End Tour**.
+- A ttt plugin (`plugin.ttt.json` and `init.lua` at the root): the Tour pane,
+  the highlights and notes, and the commands **Tour: Message Agent**,
+  **Tour: Continue** and **Tour: End Tour**.
 - `cmd/ttt-mcp`, an MCP server over stdio for the agent. It listens on
   `127.0.0.1:4250`; the plugin long-polls it for what to show and posts what you
   type.
@@ -22,13 +23,21 @@ branch. Until that lands, build ttt from the PR's branch. The plugin asks for
 
 ## Setup
 
+In ttt, run **Plugins: Install from URL** with this repository's URL, and allow
+the plugin when it asks: a bottom panel, commands, reading and writing the
+editor, editor decorations, and HTTP to `127.0.0.1:4250` (ttt-mcp) only.
+
+Build ttt-mcp:
+
 ```sh
 make build            # bin/ttt-mcp
-make install-plugin   # copies plugin/tour into ~/.config/ttt/plugins (TTT_CONFIG_DIR=... to change)
 ```
 
-Start ttt and allow the plugin when it asks. Then register the server with
-Claude Code, in the project you want explained:
+When working on the plugin, `make install-plugin` copies it into
+`~/.config/ttt/plugins/ttt-tour` instead (`TTT_CONFIG_DIR=...` to change); run
+it again after a change, then **Plugins: Reload**.
+
+Register the server with Claude Code, in the project you want explained:
 
 ```sh
 claude mcp add ttt-tour -- /absolute/path/to/bin/ttt-mcp --channel

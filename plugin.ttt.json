@@ -1,5 +1,5 @@
 {
-  "name": "tour",
+  "name": "ttt-tour",
   "displayName": "Code Tour",
   "description": "Lets an agent walk you through code over MCP (with ttt-mcp): highlights, notes, and a conversation pane.",
   "version": "0.1.0",
