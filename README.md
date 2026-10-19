@@ -15,12 +15,10 @@ Two parts:
 
 ## Requirements
 
-A ttt with the plugin APIs this needs: `ttt.decorations` (line tints, text
-highlights and notes; eugenioenko/ttt#952) and `ttt.show_panel` /
-`ttt.focus_panel`, input `autofocus` and markdown `follow`, and `ttt.net`
-requests to a loopback host the manifest lists (the plugin asks for
-`network.http: ["127.0.0.1"]`). Until those land, build ttt from a branch that
-has them.
+A ttt with `ttt.show_panel` / `ttt.focus_panel` and markdown `follow`
+(eugenioenko/ttt#991); everything else the plugin uses is in ttt's main
+branch. Until that lands, build ttt from the PR's branch. The plugin asks for
+`network.http: ["127.0.0.1:4250"]` to reach ttt-mcp.
 
 ## Setup
 
@@ -86,4 +84,4 @@ markdown}`; `say {markdown}`; `pane {where}`; `clear`; `state {include_text}`;
 `screen {path}`.
 
 Only one ttt-mcp can listen on the port at a time (`--port` changes it, but the
-plugin uses 4250).
+plugin and its manifest use 4250).
