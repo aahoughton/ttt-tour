@@ -47,7 +47,7 @@ local function thread_markdown()
     if connected then
       return "_Ask your agent for a tour, then reply here._"
     end
-    return "_Waiting for ttt-mcp on port " .. PORT .. "._"
+    return "_Start an agent with ttt-tour set up; this pane connects to its ttt-mcp on port " .. PORT .. "._"
   end
   local parts = {}
   for i, e in ipairs(thread) do
@@ -65,10 +65,10 @@ end
 
 local function status()
   if not connected then
-    return "Agent not connected"
+    return "Waiting for ttt-mcp"
   end
   if working then
-    return "Agent is working..."
+    return "Waiting for the agent..."
   end
   return " "
 end
@@ -189,9 +189,7 @@ end
 poll = function()
   request("/poll?after=" .. acked .. "&wait=" .. POLL_WAIT, nil, function(res)
     if res.status ~= 200 then
-      if connected then
-        connected = false
-      end
+      connected = false
       ttt.set_timeout(RETRY_MS, poll)
       return
     end
