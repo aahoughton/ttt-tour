@@ -94,7 +94,7 @@ func (s *server) toolList() []tool {
 	tools := []tool{
 		{
 			name:        "show_code",
-			description: "Open a file in ttt, highlight a line range, draw a note under it and add an explanation to the Tour pane.",
+			description: "Open a file in ttt, highlight a line range, draw a note under it and add an explanation to the Tour pane. Show one step at a time and let the user reply before the next. The user reads only the Tour pane, not your own replies.",
 			schema: object([]string{"file", "start_line"}, map[string]any{
 				"file":        prop("string", "file path; absolute, or relative to the current directory"),
 				"start_line":  prop("integer", "first line to highlight (1-based)"),
@@ -116,7 +116,7 @@ func (s *server) toolList() []tool {
 		},
 		{
 			name:        "say",
-			description: "Post a message (markdown) to the user in ttt's Tour pane, optionally with numbered choices to answer.",
+			description: "Post a message (markdown) to the user in ttt's Tour pane, optionally with numbered choices to answer. The user reads only the Tour pane, not your own replies, so answer every message from them with say or show_code.",
 			schema: object([]string{"text"}, map[string]any{
 				"text":    prop("string", "the message, in markdown"),
 				"choices": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "options shown as a numbered list; the user answers in their next message"},
@@ -175,14 +175,32 @@ func (s *server) toolList() []tool {
 		},
 	}
 	if !s.channel {
+		for i := range tools {
+			if tools[i].name == "show_code" || tools[i].name == "say" {
+				tools[i].run = awaitReply(tools[i].run)
+			}
+		}
 		tools = append(tools, tool{
 			name:        "wait_for_message",
-			description: "Wait for the user's next message from ttt's Tour pane.",
+			description: "Wait for the user's next message from ttt's Tour pane. Call it after every say or show_code, and again when it returns no message; it returns empty after 50 seconds. Stop calling it when the user asks to end the tour.",
 			schema:      object(nil, map[string]any{}),
 			run:         b.waitForMessage,
 		})
 	}
 	return tools
+}
+
+// awaitReply makes a successful result name the next call. Some clients never
+// show the model the server instructions or follow tool descriptions loosely;
+// the result is what the model reads right after showing the user something.
+func awaitReply(run func(context.Context, json.RawMessage) (string, error)) func(context.Context, json.RawMessage) (string, error) {
+	return func(ctx context.Context, args json.RawMessage) (string, error) {
+		out, err := run(ctx, args)
+		if err != nil {
+			return out, err
+		}
+		return out + ". Call wait_for_message for the user's reply before going on.", nil
+	}
 }
 
 type span struct {

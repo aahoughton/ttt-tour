@@ -257,7 +257,7 @@ func TestShowCodeOpensTheFileThenSendsTheStep(t *testing.T) {
 		"note":           "The program starts here.",
 		"highlight_text": []map[string]any{{"line": 4, "text": "\"héllo\")\n}"}},
 	})
-	if isErr || out != "Showing main.go:3-5" {
+	if isErr || out != "Showing main.go:3-5. Call wait_for_message for the user's reply before going on." {
 		t.Fatalf("show_code = %q, isErr %v", out, isErr)
 	}
 	ops := plugin.ops()
@@ -410,6 +410,16 @@ func TestWaitForMessageTimesOutQuietly(t *testing.T) {
 	out, isErr := c.call("wait_for_message", map[string]any{})
 	if isErr || !strings.Contains(out, "No message yet") {
 		t.Fatalf("wait = %q, isErr %v", out, isErr)
+	}
+}
+
+func TestSayPointsToWaitForMessageOnlyWithoutChannel(t *testing.T) {
+	for _, channel := range []bool{false, true} {
+		c, _ := startServer(t, &fakePlugin{}, channel)
+		out, isErr := c.call("say", map[string]any{"text": "hi"})
+		if isErr || strings.Contains(out, "wait_for_message") == channel {
+			t.Errorf("channel=%v: say = %q, isErr %v", channel, out, isErr)
+		}
 	}
 }
 
