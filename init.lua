@@ -223,6 +223,7 @@ ttt.register({
       panel:markdown({ text = thread_markdown(), follow = true })
       panel:hstack({
         gap = 1,
+        height = 1, -- without it the row takes a share of the free space
         -- ttt matches widgets by position and keeps a button's first
         -- label, so Back and Next always come first and choice i always
         -- sits in the same slot.
