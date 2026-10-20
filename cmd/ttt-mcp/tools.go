@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	defaultWaitSeconds = 120
+	// defaultWaitSeconds stays under the 60s tool-call timeout some MCP clients
+	// apply, so a user still reading gets an empty result, not a timeout error.
+	defaultWaitSeconds = 50
 	maxWaitSeconds     = 600
 )
 
