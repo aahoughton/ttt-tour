@@ -1,9 +1,9 @@
 # ttt-tour
 
-Code tours in [ttt](https://github.com/eugenioenko/ttt): an agent such as Claude
-Code opens files, highlights lines and text, draws short notes under the code,
-and talks with you in a **Tour** pane. You reply in the pane, so once you have
-asked for a tour you can stay in ttt.
+Code tours in [ttt](https://github.com/eugenioenko/ttt): a coding agent opens
+files, highlights lines and text, draws short notes under the code, and talks
+with you in a **Tour** pane. You reply in the pane, so once you have asked for a
+tour you can stay in ttt.
 
 Two parts, both in this repository:
 
@@ -20,6 +20,8 @@ A ttt newer than v1.8.0. The plugin needs `ttt.show_panel` /
 `ttt.focus_panel` and markdown `follow` (eugenioenko/ttt#991), which are on
 ttt's main branch and not yet in a release, so for now build ttt from main.
 
+An agent that can use MCP servers over stdio.
+
 ## Setup
 
 In ttt, run **Plugins: Install from URL** with this repository's URL, and allow
@@ -32,36 +34,30 @@ Build ttt-mcp:
 make build            # bin/ttt-mcp
 ```
 
-When working on the plugin, `make install-plugin` copies it into
-`~/.config/ttt/plugins/ttt-tour` instead (`TTT_CONFIG_DIR=...` to change); run
-it again after a change, then **Plugins: Reload**.
+Register `bin/ttt-mcp` with your agent:
 
-Register the server with Claude Code, in the project you want explained:
+- [Claude Code](docs/claude-code.md)
+- [Codex](docs/codex.md)
+- [pi](docs/pi.md)
 
-```sh
-claude mcp add ttt-tour -- /absolute/path/to/bin/ttt-mcp --channel
-claude --dangerously-load-development-channels server:ttt-tour
-```
+Other MCP clients work the same way as Codex: run `bin/ttt-mcp` with no
+arguments, and allow a tool call to take at least 60 seconds.
 
-`--channel` pushes what you type in the Tour pane into the Claude session as a
-channel notification; Claude Code shows a confirmation for development
-channels. Without it, ttt-mcp offers a `wait_for_message` tool instead, which
-works with any MCP client but keeps the agent busy waiting between messages.
-Use one mode or the other for a server name: a `--channel` server in a session
-started without the channel flag still shows code, but your messages do not
-reach the agent.
-
-Ask for a tour in Claude, or with the prompts below, then read and reply in
-the Tour pane. Enter on an empty input sends "continue".
+Ask for a tour, or use the prompts below, then read and reply in the Tour pane.
+Enter on an empty input sends "continue".
 
 ## Prompts
 
-| Prompt | Use |
-|--------|-----|
-| `/mcp__ttt-tour__walk TOPIC` | Guided tour of how something works |
-| `/mcp__ttt-tour__branch [BASE]` | Guided tour of what the current branch adds |
-| `/mcp__ttt-tour__quiz TOPIC` | Questions to check your understanding |
-| `/mcp__ttt-tour__pair TOPIC` | An exercise you write in ttt while the agent reviews it |
+| Prompt | Arguments | Use |
+|--------|-----------|-----|
+| `walk` | `TOPIC` | Guided tour of how something works |
+| `branch` | `[BASE]` | Guided tour of what the current branch adds |
+| `quiz` | `TOPIC` | Questions to check your understanding |
+| `pair` | `TOPIC` | An exercise you write in ttt while the agent reviews it |
+
+Claude Code shows these as `/mcp__ttt-tour__walk` and so on. Agents that do
+not support MCP prompts, such as Codex, skip them; ask for the same thing in
+your own words.
 
 ## Tools
 
@@ -73,23 +69,13 @@ the Tour pane. Enter on an empty input sends "continue".
 | `get_editor_state` | Returns the active file, cursor, viewport and selection; with `include_text`, the whole buffer including unsaved edits. |
 | `view_screen` | Returns the text on screen. |
 | `end_tour` | Removes the highlights and notes and clears the pane. |
-| `wait_for_message` | Without `--channel` only: waits for your next message. |
+| `wait_for_message` | Without `--channel` only: waits up to 50 seconds (or `wait_seconds`, at most 600) for your next message. |
 
-## Protocol
+## Development
 
-ttt-mcp serves loopback HTTP for the plugin:
+`make install-plugin` copies the plugin into `~/.config/ttt/plugins/ttt-tour`
+(`TTT_CONFIG_DIR=...` to change); run it again after a change, then
+**Plugins: Reload**. `make test` runs ttt-mcp's tests.
 
-- `GET /poll?after=ID&wait=S` returns the queued commands, `[{id, op, args}]`,
-  waiting up to `S` seconds for one. `after` acknowledges the commands up to
-  `ID`; unacknowledged ones are sent again, so a reloaded plugin replays rather
-  than loses them. IDs increase across ttt-mcp restarts.
-- `POST /result {id, data, error}` reports a command's outcome.
-- `POST /message {id, text}` sends what the user typed; `id` makes retries
-  safe.
-
-Ops: `open {path}` returns `{lines}`; `step {path, line, top, items,
-markdown}`; `say {markdown}`; `pane {where}`; `clear`; `state {include_text}`;
-`screen {path}`.
-
-Only one ttt-mcp can listen on the port at a time (`--port` changes it, but the
-plugin and its manifest use 4250).
+[docs/protocol.md](docs/protocol.md) describes the HTTP protocol between the
+plugin and ttt-mcp.
