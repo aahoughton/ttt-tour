@@ -82,6 +82,13 @@ type client struct {
 // with nothing connected when plugin is nil.
 func startServer(t *testing.T, plugin *fakePlugin, channel bool) (*client, string) {
 	t.Helper()
+	// show_code checks that the file exists; the fake plugin supplies its lines.
+	t.Chdir(t.TempDir())
+	for _, name := range []string{"a.go", "a.png", "main.go"} {
+		if err := os.WriteFile(name, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	h := newHub()
 	srv := httptest.NewServer(h.handler())
 	t.Cleanup(srv.Close)
@@ -234,7 +241,7 @@ func TestInitializeAdvertisesChannelOnlyInChannelMode(t *testing.T) {
 			Instructions string `json:"instructions"`
 		}
 		json.Unmarshal(r.Result, &res)
-		if res.ProtocolVersion != latestProtocolVersion {
+		if res.ProtocolVersion != defaultProtocolVersion {
 			t.Errorf("protocol = %q for an unknown client version", res.ProtocolVersion)
 		}
 		if _, ok := res.Capabilities.Experimental["claude/channel"]; ok != channel {
@@ -306,6 +313,8 @@ func TestShowCodeRejectsBadRangesAndText(t *testing.T) {
 		{map[string]any{"file": "a.go", "start_line": 1, "highlight_text": []map[string]any{{"line": 1, "text": "c"}}}, `"c" not found on line 1`},
 		{map[string]any{"file": "a.go", "start_line": 0}, "start_line must be 1 or more"},
 		{map[string]any{"file": "a.go", "start_line": 1, "bogus": true}, "unknown field"},
+		{map[string]any{"file": "missing.go", "start_line": 1}, "cannot show missing.go"},
+		{map[string]any{"file": ".", "start_line": 1}, "it is a directory"},
 	} {
 		out, isErr := c.call("show_code", tc.args)
 		if !isErr || !strings.Contains(out, tc.want) {

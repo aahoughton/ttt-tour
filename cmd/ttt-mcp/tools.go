@@ -64,7 +64,7 @@ user reads and replies in ttt's Tour pane.
   type an answer.
 - outline sets the tour's plan, a short title per step, shown as a menu in
   the Tour pane. Set it before the first step of a planned tour and revise it
-  whenever the conversation changes course: it is a plan, not a promise.
+  whenever the conversation changes course; it is a plan you can change.
   Pass step to show_code to mark the entry a step covers; a step without it
   (an aside, an answer to a question) leaves the marker where it was. Picking
   an entry sends "go to step N: <title>".
@@ -274,6 +274,12 @@ func (b *hub) showCode(ctx context.Context, args json.RawMessage) (string, error
 	path, err := filepath.Abs(in.File)
 	if err != nil {
 		return "", err
+	}
+	// ttt opens a missing path as a new, empty file, so check first.
+	if fi, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("cannot show %s: %w", in.File, err)
+	} else if fi.IsDir() {
+		return "", fmt.Errorf("cannot show %s: it is a directory", in.File)
 	}
 	data, err := b.call(ctx, "open", map[string]any{"path": path})
 	if err != nil {
