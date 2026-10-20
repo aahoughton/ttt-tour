@@ -1,6 +1,6 @@
 # Claude Code
 
-Register the server in the project you want explained, and start Claude with
+In the project you want explained, register the server and start Claude with
 the channel enabled:
 
 ```sh
@@ -8,9 +8,10 @@ claude mcp add ttt-tour -- /absolute/path/to/bin/ttt-mcp --channel
 claude --dangerously-load-development-channels server:ttt-tour
 ```
 
-`--channel` pushes what you type in the Tour pane into the Claude session as a
-channel notification; Claude Code shows a confirmation for development
-channels.
+`claude mcp add` registers it for that project only; add `-s user` to have it
+everywhere. `--channel` sends what you type in the Tour pane straight into the
+Claude session. Channels from your own MCP servers need that long flag, and
+Claude Code asks you to confirm when it starts.
 
 Without `--channel`, ttt-mcp offers a `wait_for_message` tool instead, as it
 does for other agents. That needs no extra flag but keeps Claude busy waiting
