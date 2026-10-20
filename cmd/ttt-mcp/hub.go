@@ -215,7 +215,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-var errNotConnected = errors.New("the ttt tour plugin is not connected: start ttt with the tour plugin enabled (see the ttt-tour README)")
+var errNotConnected = errors.New("the ttt tour plugin is not connected: open ttt with the ttt-tour plugin installed; it needs ttt built from main, since v1.8.0 cannot load it")
 
 // call queues op for the plugin and waits for its outcome.
 func (h *hub) call(ctx context.Context, op string, args any) (json.RawMessage, error) {
