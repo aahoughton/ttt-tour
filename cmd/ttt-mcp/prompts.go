@@ -14,8 +14,8 @@ type promptDef struct {
 }
 
 const pacing = `Pace it as a conversation in ttt's Tour pane: one step per show_code, then
-wait for me. "continue" means the next step; anything else is a question to
-answer first, showing other code if that helps.`
+wait for me. "continue" means the next step and "back" the previous one;
+anything else is a question to answer first, showing other code if that helps.`
 
 var prompts = []promptDef{
 	{

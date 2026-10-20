@@ -7,8 +7,8 @@ tour you can stay in ttt.
 
 There are two parts, both in this repository:
 
-- A ttt plugin (`plugin.ttt.json` and `init.lua`): the Tour pane, the
-  highlights and notes, and the commands **Tour: Message Agent**,
+- A ttt plugin (`plugin.ttt.json` and `init.lua`): the Tour pane with its
+  Back and Next buttons, the highlights and notes, and the commands **Tour: Message Agent**,
   **Tour: Continue** and **Tour: End Tour**.
 - `ttt-mcp`, an MCP server the agent runs over stdio. It listens on
   `127.0.0.1:4250`, and the plugin polls it for what to show and sends it
@@ -61,8 +61,10 @@ no arguments, and let a tool call take at least 60 seconds.
    loading works", or use one of the [prompts](#prompts).
 4. Read along in ttt and reply in the Tour pane. The pane appears with the
    first step, and steps keep your current focus; to reply, click the Tour
-   input or run **Tour: Message Agent**. Enter on an empty input sends
-   "continue".
+   input or run **Tour: Message Agent**. **Next >** (or Enter on an empty
+   input) sends "continue" and **< Back** sends "back"; the agent decides
+   what going back means. When the agent offers numbered choices, a button
+   per number answers with that choice.
 
 ## Rough edges
 
@@ -110,7 +112,7 @@ don't offer MCP prompts; ask for the same thing in your own words.
 | Tool | What it does |
 |------|--------------|
 | `show_code` | Opens a file, tints `start_line`..`end_line`, highlights each `highlight_text` entry, draws `note` under the range and adds `explanation` (markdown) to the Tour pane. Relative paths resolve against ttt-mcp's working directory. |
-| `say` | Posts a markdown message to the Tour pane, with optional numbered `choices`. |
+| `say` | Posts a markdown message to the Tour pane, with optional numbered `choices`, each with a button. |
 | `move_pane` | Docks ttt's panel area at the `bottom` or `right` (saved as your layout), or brings the Tour pane to the front (`show`). |
 | `get_editor_state` | Returns the active file, cursor, viewport and selection; with `include_text`, the whole buffer including unsaved edits. |
 | `view_screen` | Returns the text on screen. |

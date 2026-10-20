@@ -38,9 +38,20 @@ local function request(path, body, done)
   end
 end
 
-local function add(kind, text)
-  table.insert(thread, { kind = kind, text = text })
+local function add(kind, text, choices)
+  table.insert(thread, { kind = kind, text = text, choices = choices })
 end
+
+-- open_choices returns the choices of the agent's latest message while the
+-- user has not answered it.
+local function open_choices()
+  local last = thread[#thread]
+  if working or not last or not last.choices then
+    return {}
+  end
+  return last.choices
+end
+
 
 local function thread_markdown()
   if #thread == 0 then
@@ -125,7 +136,7 @@ function ops.step(a)
 end
 
 function ops.say(a)
-  add("agent", a.markdown)
+  add("agent", a.markdown, a.choices)
   working = false
   ttt.show_panel("bottom")
 end
@@ -210,7 +221,35 @@ ttt.register({
     title = "Tour",
     render = function(panel)
       panel:markdown({ text = thread_markdown(), follow = true })
-      panel:label({ text = status(), style = "muted" })
+      panel:hstack({
+        gap = 1,
+        -- ttt matches widgets by position and keeps a button's first
+        -- label, so Back and Next always come first and choice i always
+        -- sits in the same slot.
+        render = function(row)
+          row:label({ text = status(), style = "muted" })
+          row:button({
+            label = "< Back",
+            on_click = function()
+              send("back")
+            end,
+          })
+          row:button({
+            label = "Next >",
+            on_click = function()
+              send("continue")
+            end,
+          })
+          for i, choice in ipairs(open_choices()) do
+            row:button({
+              label = tostring(i),
+              on_click = function()
+                send(i .. ". " .. choice)
+              end,
+            })
+          end
+        end,
+      })
       panel:input({
         prefix = "> ",
         placeholder = "Message the agent (Enter alone: continue; Alt+Enter or Ctrl+J: new line)",

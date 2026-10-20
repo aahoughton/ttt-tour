@@ -351,7 +351,7 @@ func TestSayAndMovePane(t *testing.T) {
 		t.Fatalf("move_pane left = %q, want an error", out)
 	}
 	ops := plugin.ops()
-	if len(ops) != 2 || string(ops[0].Args) != `{"markdown":"Which one?\n\n1. a\n2. b"}` || string(ops[1].Args) != `{"where":"right"}` {
+	if len(ops) != 2 || string(ops[0].Args) != `{"choices":["a","b"],"markdown":"Which one?\n\n1. a\n2. b"}` || string(ops[1].Args) != `{"where":"right"}` {
 		t.Fatalf("ops = %+v", ops)
 	}
 }

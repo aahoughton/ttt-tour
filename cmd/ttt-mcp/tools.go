@@ -60,7 +60,8 @@ user reads and replies in ttt's Tour pane.
   fit on one screen. highlight_text points at exact text inside the range (a
   parameter, a type, a phrase in a spec). Focus stays where the user left it.
 - say posts a message to the Tour pane; with choices it is a numbered list
-  the user can answer by number.
+  with a button per number. A click sends "N. <choice>"; the user can also
+  type an answer.
 - move_pane puts the pane at the bottom (wide code, long lines) or on the
   right (a running conversation beside the code). This changes the user's
   panel layout, so do it only when it clearly helps.
@@ -72,7 +73,9 @@ user reads and replies in ttt's Tour pane.
 Text you write in your own transcript never reaches the user: anything they
 should see goes through say or show_code. Answer every user message with say
 or show_code, even briefly; the pane shows "Waiting for the agent" until you do.
-A message of "continue" means go on to the next step.
+The pane has Back and Next buttons. "continue" (Next) means go on to the
+next step. "back" (Back) means return to the previous step: usually show it
+again, or recap it with say if that serves the user better.
 `)
 	if s.channel {
 		sb.WriteString(`
@@ -119,7 +122,7 @@ func (s *server) toolList() []tool {
 			description: "Post a message (markdown) to the user in ttt's Tour pane, optionally with numbered choices to answer. The user reads only the Tour pane, not your own replies, so answer every message from them with say or show_code.",
 			schema: object([]string{"text"}, map[string]any{
 				"text":    prop("string", "the message, in markdown"),
-				"choices": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "options shown as a numbered list; the user answers in their next message"},
+				"choices": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "options shown as a numbered list with a button each; the user answers in their next message"},
 			}),
 			run: b.say,
 		},
@@ -378,7 +381,11 @@ func (b *hub) say(ctx context.Context, args json.RawMessage) (string, error) {
 		}
 		text += fmt.Sprintf("%s%d. %s", sep, i+1, c)
 	}
-	if _, err := b.call(ctx, "say", map[string]string{"markdown": text}); err != nil {
+	msg := map[string]any{"markdown": text}
+	if len(in.Choices) > 0 {
+		msg["choices"] = in.Choices
+	}
+	if _, err := b.call(ctx, "say", msg); err != nil {
 		return "", err
 	}
 	return "Posted", nil
