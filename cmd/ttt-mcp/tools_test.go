@@ -319,6 +319,47 @@ func TestShowCodeRejectsBadRangesAndText(t *testing.T) {
 	}
 }
 
+func TestOutlineAndStepsThatMarkIt(t *testing.T) {
+	plugin := &fakePlugin{respond: openFile("a := 1", "b := 2")}
+	c, _ := startServer(t, plugin, false)
+	if out, isErr := c.call("show_code", map[string]any{"file": "a.go", "start_line": 1, "step": 1}); !isErr || !strings.Contains(out, "set it with outline first") {
+		t.Fatalf("step before outline = %q, isErr %v", out, isErr)
+	}
+	if out, isErr := c.call("outline", map[string]any{"steps": []string{"One", "Two"}}); isErr {
+		t.Fatal(out)
+	}
+	if out, isErr := c.call("show_code", map[string]any{"file": "a.go", "start_line": 2, "step": 2}); isErr {
+		t.Fatal(out)
+	}
+	if out, isErr := c.call("show_code", map[string]any{"file": "a.go", "start_line": 1}); isErr {
+		t.Fatal(out)
+	}
+	if out, isErr := c.call("show_code", map[string]any{"file": "a.go", "start_line": 1, "step": 3}); !isErr || !strings.Contains(out, "step 3 is not in the outline") {
+		t.Fatalf("step 3 = %q, isErr %v", out, isErr)
+	}
+	var got []string
+	for _, op := range plugin.ops() {
+		if op.Op == "outline" || op.Op == "step" {
+			var args struct {
+				Outline json.RawMessage `json:"outline"`
+			}
+			json.Unmarshal(op.Args, &args)
+			got = append(got, op.Op+" "+string(args.Outline))
+		}
+	}
+	want := []string{
+		"outline ",
+		`step {"steps":["One","Two"],"current":2}`,
+		"step ",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ops = %q, want %q", got, want)
+	}
+	if outline := plugin.ops()[0]; outline.Op != "outline" || string(outline.Args) != `{"steps":["One","Two"],"current":0}` {
+		t.Fatalf("first op = %s %s", outline.Op, outline.Args)
+	}
+}
+
 func TestSpanDecorationCountsMatchesWithoutOverlap(t *testing.T) {
 	lines := []string{"x == y == z ==== w", "世界 ab ab"}
 	for _, tc := range []struct {

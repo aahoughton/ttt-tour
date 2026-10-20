@@ -63,6 +63,7 @@ type hub struct {
 	seen     map[string]bool
 	msgWake  chan struct{}
 	at       string
+	outline  outline
 
 	// addr is where the plugin connects; empty when something else serves
 	// the handler (tests).

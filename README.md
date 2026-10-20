@@ -65,6 +65,11 @@ no arguments, and let a tool call take at least 60 seconds.
    input) sends "continue" and **< Back** sends "back"; the agent decides
    what going back means. When the agent offers numbered choices, a button
    per number answers with that choice.
+5. For a planned tour the agent posts an outline, and a menu at the end of
+   the button row shows where you are ("2/5 ..."). Pick an entry with the
+   mouse to jump there, or type "go to step 4". Wander off whenever you like:
+   the agent shows asides without moving the marker, and revises the outline
+   if the tour changes course.
 
 ## Rough edges
 
@@ -111,7 +116,8 @@ don't offer MCP prompts; ask for the same thing in your own words.
 
 | Tool | What it does |
 |------|--------------|
-| `show_code` | Opens a file, tints `start_line`..`end_line`, highlights each `highlight_text` entry, draws `note` under the range and adds `explanation` (markdown) to the Tour pane. Relative paths resolve against ttt-mcp's working directory. |
+| `show_code` | Opens a file, tints `start_line`..`end_line`, highlights each `highlight_text` entry, draws `note` under the range and adds `explanation` (markdown) to the Tour pane. `step` marks the outline entry it covers. Relative paths resolve against ttt-mcp's working directory. |
+| `outline` | Sets or revises the tour's plan, a title per step, shown as a menu in the Tour pane. |
 | `say` | Posts a markdown message to the Tour pane, with optional numbered `choices`, each with a button. |
 | `move_pane` | Docks ttt's panel area at the `bottom` or `right` (saved as your layout), or brings the Tour pane to the front (`show`). |
 | `get_editor_state` | Returns the active file, cursor, viewport and selection; with `include_text`, the whole buffer including unsaved edits. |

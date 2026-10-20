@@ -17,6 +17,7 @@ local thread = {}      -- { kind = "agent" | "user" | "step", text = markdown }
 local acked = 0        -- last command carried out
 local connected = false
 local working = false  -- the user sent something the agent has not answered
+local plan = { steps = {}, current = 0 } -- the agent's outline; current is 1-based, 0 for none
 local outbox = {}      -- messages not yet accepted by ttt-mcp
 local sending = false
 local session = tostring(os.time()) .. "-" .. tostring(math.random(1, 1000000))
@@ -123,7 +124,34 @@ function ops.open(a)
   return { lines = editor.buffer_lines() }
 end
 
+-- set_plan takes the outline from ttt-mcp and posts it to the thread when
+-- its steps changed, so the user sees the plan and each revision.
+local function set_plan(p)
+  local steps = p.steps or {}
+  local changed = #steps ~= #plan.steps
+  for i, s in ipairs(steps) do
+    changed = changed or s ~= plan.steps[i]
+  end
+  if changed and #steps > 0 then
+    local lines = { #plan.steps > 0 and "**Outline, revised**" or "**Outline**", "" }
+    for i, s in ipairs(steps) do
+      table.insert(lines, i .. ". " .. s)
+    end
+    add("agent", table.concat(lines, "\n"))
+  end
+  plan = { steps = steps, current = p.current or 0 }
+end
+
+function ops.outline(a)
+  set_plan(a)
+  working = false
+  ttt.show_panel("bottom")
+end
+
 function ops.step(a)
+  if a.outline then
+    set_plan(a.outline)
+  end
   deco.clear()
   deco.set(a.path, a.items)
   if editor.file_path() == a.path then
@@ -153,6 +181,7 @@ end
 function ops.clear()
   deco.clear()
   thread = {}
+  plan = { steps = {}, current = 0 }
   working = false
 end
 
@@ -216,6 +245,41 @@ poll = function()
   end)
 end
 
+-- shorten cuts s to about n bytes without splitting a UTF-8 character.
+local function shorten(s, n)
+  if #s <= n then
+    return s
+  end
+  local cut = n
+  while cut > 0 and s:byte(cut + 1) >= 0x80 and s:byte(cut + 1) < 0xC0 do
+    cut = cut - 1
+  end
+  return s:sub(1, cut) .. "..."
+end
+
+-- outline_menu is the dropdown that shows where the tour is and jumps to a
+-- step on request.
+local function outline_menu()
+  local label = "Outline (" .. #plan.steps .. ")"
+  if plan.current > 0 then
+    label = plan.current .. "/" .. #plan.steps .. " " .. shorten(plan.steps[plan.current], 30)
+  end
+  local entries = {}
+  for i, s in ipairs(plan.steps) do
+    table.insert(entries, { label = i .. ". " .. s, command = tostring(i), checked = i == plan.current })
+  end
+  return {
+    label = label,
+    entries = entries,
+    on_menu = function(command)
+      local i = tonumber(command)
+      if plan.steps[i] then
+        send("go to step " .. i .. ": " .. plan.steps[i])
+      end
+    end,
+  }
+end
+
 ttt.register({
   bottom = {
     title = "Tour",
@@ -248,6 +312,9 @@ ttt.register({
                 send(i .. ". " .. choice)
               end,
             })
+          end
+          if #plan.steps > 0 then
+            row:dropdown(outline_menu())
           end
         end,
       })

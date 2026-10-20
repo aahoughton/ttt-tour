@@ -62,6 +62,12 @@ user reads and replies in ttt's Tour pane.
 - say posts a message to the Tour pane; with choices it is a numbered list
   with a button per number. A click sends "N. <choice>"; the user can also
   type an answer.
+- outline sets the tour's plan, a short title per step, shown as a menu in
+  the Tour pane. Set it before the first step of a planned tour and revise it
+  whenever the conversation changes course: it is a plan, not a promise.
+  Pass step to show_code to mark the entry a step covers; a step without it
+  (an aside, an answer to a question) leaves the marker where it was. Picking
+  an entry sends "go to step N: <title>".
 - move_pane puts the pane at the bottom (wide code, long lines) or on the
   right (a running conversation beside the code). This changes the user's
   panel layout, so do it only when it clearly helps.
@@ -103,6 +109,7 @@ func (s *server) toolList() []tool {
 				"start_line":  prop("integer", "first line to highlight (1-based)"),
 				"end_line":    prop("integer", "last line to highlight, inclusive; defaults to start_line"),
 				"title":       prop("string", "short heading for this step"),
+				"step":        prop("integer", "the outline entry this step covers (1-based); omit for an aside"),
 				"explanation": prop("string", "markdown for the Tour pane: the main explanation of this step"),
 				"note":        prop("string", "one or two plain-text sentences drawn under the highlighted lines; a blank line starts a new paragraph"),
 				"highlight_text": map[string]any{
@@ -127,6 +134,15 @@ func (s *server) toolList() []tool {
 			run: b.say,
 		},
 		{
+			name:        "outline",
+			description: "Set or revise the tour's outline: a short title per step, shown as a menu in the Tour pane. Revise it freely as the tour changes course; mark progress with show_code's step.",
+			schema: object([]string{"steps"}, map[string]any{
+				"steps":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "a short title per step, in order"},
+				"current": prop("integer", "the entry the user is on (1-based); 0 or omitted before the first"),
+			}),
+			run: b.setOutline,
+		},
+		{
 			name:        "move_pane",
 			description: "Dock ttt's panel area, which holds the Tour pane, at the bottom or on the right, or bring the Tour pane to the front. Docking is saved as the user's layout.",
 			schema: object([]string{"position"}, map[string]any{
@@ -143,6 +159,9 @@ func (s *server) toolList() []tool {
 					return "", err
 				}
 				b.setLocation("")
+				b.mu.Lock()
+				b.outline = outline{}
+				b.mu.Unlock()
 				return "Tour ended", nil
 			},
 		},
@@ -228,6 +247,7 @@ func (b *hub) showCode(ctx context.Context, args json.RawMessage) (string, error
 		StartLine   int    `json:"start_line"`
 		EndLine     int    `json:"end_line"`
 		Title       string `json:"title"`
+		Step        int    `json:"step"`
 		Explanation string `json:"explanation"`
 		Note        string `json:"note"`
 		Highlights  []span `json:"highlight_text"`
@@ -237,6 +257,15 @@ func (b *hub) showCode(ctx context.Context, args json.RawMessage) (string, error
 	}
 	if in.File == "" {
 		return "", fmt.Errorf("file is required")
+	}
+	var plan outline
+	if in.Step != 0 {
+		b.mu.Lock()
+		plan = outline{Steps: b.outline.Steps, Current: in.Step}
+		b.mu.Unlock()
+		if in.Step < 1 || in.Step > len(plan.Steps) {
+			return "", fmt.Errorf("step %d is not in the outline, which has %d steps; set it with outline first", in.Step, len(plan.Steps))
+		}
 	}
 	end := max(in.EndLine, in.StartLine)
 	if in.StartLine < 1 {
@@ -284,10 +313,18 @@ func (b *hub) showCode(ctx context.Context, args json.RawMessage) (string, error
 		"top":      max(1, in.StartLine-3),
 		"markdown": stepMarkdown(in.Title, at, in.Explanation),
 	}
+	if in.Step != 0 {
+		step["outline"] = plan
+	}
 	if _, err := b.call(ctx, "step", step); err != nil {
 		return "", err
 	}
 	b.setLocation(at)
+	if in.Step != 0 {
+		b.mu.Lock()
+		b.outline.Current = in.Step
+		b.mu.Unlock()
+	}
 	return "Showing " + at, nil
 }
 
@@ -363,6 +400,33 @@ func runePos(text string, off int) (line, col int) {
 		before = before[i+1:]
 	}
 	return line, utf8.RuneCountInString(before)
+}
+
+// outline is the tour's plan as the Tour pane shows it. Current is the
+// 1-based entry the user is on, or 0 before the first.
+type outline struct {
+	Steps   []string `json:"steps"`
+	Current int      `json:"current"`
+}
+
+func (b *hub) setOutline(ctx context.Context, args json.RawMessage) (string, error) {
+	var in outline
+	if err := decodeArgs(args, &in); err != nil {
+		return "", err
+	}
+	if len(in.Steps) == 0 {
+		return "", fmt.Errorf("steps is required")
+	}
+	if in.Current < 0 || in.Current > len(in.Steps) {
+		return "", fmt.Errorf("current must be between 0 and %d", len(in.Steps))
+	}
+	if _, err := b.call(ctx, "outline", in); err != nil {
+		return "", err
+	}
+	b.mu.Lock()
+	b.outline = in
+	b.mu.Unlock()
+	return fmt.Sprintf("Outline set: %d steps", len(in.Steps)), nil
 }
 
 func (b *hub) say(ctx context.Context, args json.RawMessage) (string, error) {

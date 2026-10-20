@@ -23,7 +23,8 @@ var prompts = []promptDef{
 		arg: "topic", argDesc: "what to explain, e.g. a feature, file or flow", argRequired: true,
 		text: func(topic string) string {
 			return fmt.Sprintf(`Walk me through %s in ttt. Read the code first, then plan a short sequence
-of steps in a logical order, each a range that fits on one screen.
+of steps in a logical order, each a range that fits on one screen, and set it
+with outline. Revise the outline if we change course.
 
 %s
 
@@ -41,7 +42,8 @@ End with a short summary using say.`, topic, pacing)
 			return fmt.Sprintf(`Explain what the current branch adds compared to %s. Read the commits and
 the diff yourself first. Then walk me through the change in a logical order
 rather than file order: the goal, the core change, then supporting pieces and
-tests. Show the new code with show_code on the working tree files.
+tests. Set that plan with outline. Show the new code with show_code on the
+working tree files.
 
 %s
 

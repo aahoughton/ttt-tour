@@ -11,8 +11,9 @@ ttt-mcp serves loopback HTTP for the plugin:
   safe.
 
 Ops: `open {path}` returns `{lines}`; `step {path, line, top, items,
-markdown}`; `say {markdown, choices}` (choices optional); `pane {where}`; `clear`; `state {include_text}`;
-`screen {path}`.
+markdown, outline}` (outline optional); `say {markdown, choices}` (choices
+optional); `outline {steps, current}`; `pane {where}`; `clear`;
+`state {include_text}`; `screen {path}`.
 
 Only one ttt-mcp can listen on the port at a time (`--port` changes it, but the
 plugin and its manifest use 4250).
