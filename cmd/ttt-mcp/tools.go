@@ -71,7 +71,7 @@ user reads and replies in ttt's Tour pane.
 
 Text you write in your own transcript never reaches the user: anything they
 should see goes through say or show_code. Answer every user message with say
-or show_code, even briefly; the pane shows "Agent is working" until you do.
+or show_code, even briefly; the pane shows "Waiting for the agent" until you do.
 A message of "continue" means go on to the next step.
 `)
 	if s.channel {
