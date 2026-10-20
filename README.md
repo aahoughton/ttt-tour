@@ -8,8 +8,8 @@ tour you can stay in ttt.
 There are two parts, both in this repository:
 
 - A ttt plugin (`plugin.ttt.json` and `init.lua`): the Tour pane with its
-  Back and Next buttons, the highlights and notes, and the commands **Tour: Message Agent**,
-  **Tour: Continue** and **Tour: End Tour**.
+  Back and Next buttons, the highlights and notes, and the commands
+  **Tour: Message Agent**, **Tour: Continue** and **Tour: End Tour**.
 - `ttt-mcp`, an MCP server the agent runs over stdio. It listens on
   `127.0.0.1:4250`, and the plugin polls it for what to show and sends it
   what you type.
@@ -73,14 +73,14 @@ no arguments, and let a tool call take at least 60 seconds.
 
 ## Rough edges
 
-Agent tooling is still young, and some of that shows:
+A few things are still rough:
 
 - One tour at a time. ttt-mcp needs port 4250, so a second agent session with
   ttt-tour has to wait for the first one to quit. Keep one ttt window open
   with the plugin, too: two would both act on the tour's steps.
 - ttt has to come from main until the next release.
-- Claude Code needs a long flag to let your replies reach it as you type them
-  (see [its page](docs/claude-code.md)).
+- Claude Code needs a long flag to let your replies reach it as soon as you
+  send them (see [its page](docs/claude-code.md)).
 - Agents that use `wait_for_message` are busy while they wait for you, and some
   models stop waiting after the last step. If the agent doesn't answer, tell it
   in its own terminal to check the Tour pane.

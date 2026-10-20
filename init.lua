@@ -53,7 +53,6 @@ local function open_choices()
   return last.choices
 end
 
-
 local function thread_markdown()
   if #thread == 0 then
     if connected then
@@ -202,6 +201,7 @@ function ops.state(a)
   return st
 end
 
+-- ttt documents ttt.screenshot as a debug helper; view_screen relies on it.
 function ops.screen(a)
   ttt.screenshot(a.path)
 end
@@ -209,8 +209,6 @@ end
 local function report(id, data, err)
   request("/result", json.encode({ id = id, data = data, error = err }), function() end)
 end
-
-local poll
 
 local function handle(cmd)
   local op = ops[cmd.op]
@@ -226,7 +224,7 @@ local function handle(cmd)
   end
 end
 
-poll = function()
+local function poll()
   request("/poll?after=" .. acked .. "&wait=" .. POLL_WAIT, nil, function(res)
     if res.status ~= 200 then
       connected = false

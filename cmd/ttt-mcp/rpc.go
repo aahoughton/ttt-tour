@@ -16,7 +16,7 @@ import (
 // hand-written so the server can send Claude Code's channel notifications,
 // which typed SDKs do not expose.
 
-const latestProtocolVersion = "2025-06-18"
+const defaultProtocolVersion = "2025-06-18"
 
 var knownProtocolVersions = []string{"2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"}
 
@@ -181,7 +181,7 @@ func (s *server) handleRequest(ctx context.Context, msg rpcIncoming) (any, error
 			ProtocolVersion string `json:"protocolVersion"`
 		}
 		_ = json.Unmarshal(msg.Params, &p)
-		proto := latestProtocolVersion
+		proto := defaultProtocolVersion
 		if slices.Contains(knownProtocolVersions, p.ProtocolVersion) {
 			proto = p.ProtocolVersion
 		}
