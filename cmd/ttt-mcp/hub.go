@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -60,6 +63,12 @@ type hub struct {
 	seen     map[string]bool
 	msgWake  chan struct{}
 	at       string
+
+	// addr is where the plugin connects; empty when something else serves
+	// the handler (tests).
+	addr      string
+	lmu       sync.Mutex
+	listening bool
 }
 
 func newHub() *hub {
@@ -80,6 +89,31 @@ func (h *hub) handler() http.Handler {
 	mux.HandleFunc("POST /result", h.handleResult)
 	mux.HandleFunc("POST /message", h.handleMessage)
 	return mux
+}
+
+// listen serves the plugin on h.addr unless it already does. Tool calls run
+// it again, so a ttt-mcp that started while another held the port takes
+// over once that one quits.
+func (h *hub) listen() error {
+	h.lmu.Lock()
+	defer h.lmu.Unlock()
+	if h.addr == "" || h.listening {
+		return nil
+	}
+	ln, err := net.Listen("tcp", h.addr)
+	if errors.Is(err, syscall.EADDRINUSE) {
+		return fmt.Errorf("%s is in use, probably by ttt-mcp for another agent session; quit that session and try again", h.addr)
+	}
+	if err != nil {
+		return fmt.Errorf("cannot listen for the tour plugin: %w", err)
+	}
+	h.listening = true
+	go func() {
+		if err := http.Serve(ln, h.handler()); err != nil && !errors.Is(err, net.ErrClosed) {
+			log.Print(err)
+		}
+	}()
+	return nil
 }
 
 func (h *hub) connected() bool {
@@ -185,6 +219,9 @@ var errNotConnected = errors.New("the ttt tour plugin is not connected: start tt
 
 // call queues op for the plugin and waits for its outcome.
 func (h *hub) call(ctx context.Context, op string, args any) (json.RawMessage, error) {
+	if err := h.listen(); err != nil {
+		return nil, err
+	}
 	if !h.connected() {
 		return nil, errNotConnected
 	}

@@ -421,6 +421,9 @@ func (b *hub) waitForMessage(ctx context.Context, args json.RawMessage) (string,
 	if err := decodeArgs(args, &struct{}{}); err != nil {
 		return "", err
 	}
+	if err := b.listen(); err != nil {
+		return "", err
+	}
 	msgs, err := b.recv(ctx, messageWait)
 	if err == errNoMessage {
 		return "No message yet. Call wait_for_message again to keep waiting.", nil

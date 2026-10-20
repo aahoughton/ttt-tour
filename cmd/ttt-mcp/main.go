@@ -5,12 +5,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"strconv"
 )
@@ -24,7 +22,7 @@ func main() {
 	log.SetFlags(0)
 	log.SetPrefix("ttt-mcp: ")
 	channel := flag.Bool("channel", false, "push messages from the Tour pane to Claude Code as channel notifications\n(start Claude with --dangerously-load-development-channels server:<name>)")
-	port := flag.Int("port", defaultPort, "loopback port the tour plugin connects to")
+	port := flag.Int("port", defaultPort, "loopback port for the tour plugin (the plugin itself only uses 4250)")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: ttt-mcp [--channel] [--port N]\n\nstdio MCP server for code tours in ttt; the tour plugin connects to it on 127.0.0.1.")
 		flag.PrintDefaults()
@@ -35,15 +33,11 @@ func main() {
 		os.Exit(2)
 	}
 	h := newHub()
-	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(*port)))
-	if err != nil {
-		log.Printf("cannot listen for the tour plugin: %v (is another ttt-mcp running?)", err)
-	} else {
-		go func() {
-			if err := http.Serve(ln, h.handler()); err != nil && !errors.Is(err, net.ErrClosed) {
-				log.Print(err)
-			}
-		}()
+	h.addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(*port))
+	// A taken port is not fatal: tool calls report it to the agent and
+	// retry, which reaches the user sooner than a server that fails to start.
+	if err := h.listen(); err != nil {
+		log.Print(err)
 	}
 	if err := newServer(h, *channel).serve(context.Background(), os.Stdin, os.Stdout); err != nil {
 		log.Print(err)

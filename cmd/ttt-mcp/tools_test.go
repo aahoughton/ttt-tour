@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -361,6 +362,33 @@ func TestPluginErrorsReachTheAgent(t *testing.T) {
 	if !isErr || out != "ttt: not a text file" {
 		t.Fatalf("show_code = %q, isErr %v", out, isErr)
 	}
+}
+
+func TestTakenPortIsReportedAndRetried(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	h := newHub()
+	h.addr = ln.Addr().String()
+	for _, call := range []func() error{
+		func() error { _, err := h.call(context.Background(), "say", nil); return err },
+		func() error { _, err := h.waitForMessage(context.Background(), json.RawMessage(`{}`)); return err },
+	} {
+		if err := call(); err == nil || !strings.Contains(err.Error(), h.addr+" is in use") {
+			t.Fatalf("err = %v, want %s is in use", err, h.addr)
+		}
+	}
+	ln.Close()
+	if _, err := h.call(context.Background(), "say", nil); err != errNotConnected {
+		t.Fatalf("after the port frees up, err = %v, want errNotConnected", err)
+	}
+	resp, err := http.Get("http://" + h.addr + "/poll?wait=0")
+	if err != nil {
+		t.Fatalf("hub does not serve the plugin after taking over the port: %v", err)
+	}
+	resp.Body.Close()
 }
 
 func TestToolsFailFastWithoutThePlugin(t *testing.T) {
