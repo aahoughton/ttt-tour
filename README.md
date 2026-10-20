@@ -44,7 +44,9 @@ Other MCP clients work the same way as Codex: run `bin/ttt-mcp` with no
 arguments, and allow a tool call to take at least 60 seconds.
 
 Ask for a tour, or use the prompts below, then read and reply in the Tour pane.
-Enter on an empty input sends "continue".
+Each step leaves the focus in the editor so you can move around the code;
+click the Tour input or run **Tour: Message Agent** to reply. Enter on an empty
+input sends "continue".
 
 ## Prompts
 
