@@ -12,12 +12,12 @@ import (
 	"unicode/utf8"
 )
 
-const (
-	// defaultWaitSeconds stays under the 60s tool-call timeout some MCP clients
-	// apply, so a user still reading gets an empty result, not a timeout error.
-	defaultWaitSeconds = 50
-	maxWaitSeconds     = 600
-)
+// messageWait is how long wait_for_message waits before returning empty. It
+// stays under the 60s tool-call timeout of clients such as Codex and pi, so a
+// user still reading gets an empty result, not a timeout error. Agents do not
+// choose it: given the choice, they pick waits the client times out. A
+// variable so tests can shorten it.
+var messageWait = 50 * time.Second
 
 type tool struct {
 	name        string
@@ -82,7 +82,7 @@ at="file:lines">text</channel>; "at" is the step on screen when they sent it.
 	} else {
 		sb.WriteString(`
 After each reply, call wait_for_message to receive the user's next message
-from the Tour pane. It returns without messages after wait_seconds; call it
+from the Tour pane. It returns without messages after 50 seconds; call it
 again to keep waiting. Stop when the user asks to end the tour.
 `)
 	}
@@ -178,10 +178,8 @@ func (s *server) toolList() []tool {
 		tools = append(tools, tool{
 			name:        "wait_for_message",
 			description: "Wait for the user's next message from ttt's Tour pane.",
-			schema: object(nil, map[string]any{
-				"wait_seconds": prop("integer", fmt.Sprintf("seconds to wait before returning empty (default %d, max %d)", defaultWaitSeconds, maxWaitSeconds)),
-			}),
-			run: b.waitForMessage,
+			schema:      object(nil, map[string]any{}),
+			run:         b.waitForMessage,
 		})
 	}
 	return tools
@@ -402,17 +400,10 @@ func (b *hub) viewScreen(ctx context.Context, _ json.RawMessage) (string, error)
 }
 
 func (b *hub) waitForMessage(ctx context.Context, args json.RawMessage) (string, error) {
-	var in struct {
-		WaitSeconds int `json:"wait_seconds"`
-	}
-	if err := decodeArgs(args, &in); err != nil {
+	if err := decodeArgs(args, &struct{}{}); err != nil {
 		return "", err
 	}
-	seconds := in.WaitSeconds
-	if seconds <= 0 {
-		seconds = defaultWaitSeconds
-	}
-	msgs, err := b.recv(ctx, time.Duration(min(seconds, maxWaitSeconds))*time.Second)
+	msgs, err := b.recv(ctx, messageWait)
 	if err == errNoMessage {
 		return "No message yet. Call wait_for_message again to keep waiting.", nil
 	}

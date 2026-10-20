@@ -69,7 +69,7 @@ your own words.
 | `get_editor_state` | Returns the active file, cursor, viewport and selection; with `include_text`, the whole buffer including unsaved edits. |
 | `view_screen` | Returns the text on screen. |
 | `end_tour` | Removes the highlights and notes and clears the pane. |
-| `wait_for_message` | Without `--channel` only: waits up to 50 seconds (or `wait_seconds`, at most 600) for your next message. |
+| `wait_for_message` | Without `--channel` only: waits up to 50 seconds for your next message. |
 
 ## Development
 

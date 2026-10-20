@@ -391,7 +391,7 @@ func TestWaitForMessageReturnsEachMessageOnceWithItsStep(t *testing.T) {
 	postMessage(t, base, "s1:1", "why?")
 	postMessage(t, base, "s1:1", "why?")
 	postMessage(t, base, "s1:2", "continue")
-	out, isErr := c.call("wait_for_message", map[string]any{"wait_seconds": 5})
+	out, isErr := c.call("wait_for_message", map[string]any{})
 	if isErr {
 		t.Fatal(out)
 	}
@@ -404,8 +404,10 @@ func TestWaitForMessageReturnsEachMessageOnceWithItsStep(t *testing.T) {
 }
 
 func TestWaitForMessageTimesOutQuietly(t *testing.T) {
+	defer func(d time.Duration) { messageWait = d }(messageWait)
+	messageWait = 100 * time.Millisecond
 	c, _ := startServer(t, nil, false)
-	out, isErr := c.call("wait_for_message", map[string]any{"wait_seconds": 1})
+	out, isErr := c.call("wait_for_message", map[string]any{})
 	if isErr || !strings.Contains(out, "No message yet") {
 		t.Fatalf("wait = %q, isErr %v", out, isErr)
 	}
